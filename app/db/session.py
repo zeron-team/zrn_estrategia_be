@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 # --- Conexión a la Base de Datos del Chatbot ---
-CHATBOT_DB_URL = f"mysql+mysqlconnector://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
+CHATBOT_DB_URL = f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
 
 # Añadimos pool_recycle y pool_pre_ping para mantener la conexión viva
 engine_chatbot = create_engine(

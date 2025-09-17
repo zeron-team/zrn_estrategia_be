@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
     TWILIO_FROM_NUMBER: str
+    TWILIO_MESSAGING_SERVICE_SID: str | None = None
 
     WHATSAPP_VERIFY_TOKEN: str
 
@@ -29,6 +30,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    TEST_MODE_PHONE_NUMBER: str | None = None
+    TEST_PHONE_NUMBER: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env")
 

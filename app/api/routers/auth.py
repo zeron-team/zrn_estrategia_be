@@ -10,7 +10,6 @@ from app.crud.auth_queries import get_user
 from app.security import verify_password, create_access_token
 from app.core.config import settings
 
-# --- ESTA ES LA LÍNEA QUE FALTABA ---
 router = APIRouter()
 
 @router.post("/token")

@@ -1,25 +1,26 @@
-# app/crud/interactions_queries.py
+
+# app/crud/messages_queries.py
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Dict, Any
 
 
-def get_interaction_kpis(db: Session) -> Dict[str, int]:
-    """Cuenta el total de interacciones, entrantes y salientes."""
+def get_message_kpis(db: Session) -> Dict[str, int]:
+    """Cuenta el total de mensajes, entrantes y salientes."""
     query = text("""
         SELECT
-            COUNT(id) AS total_interactions,
+            COUNT(id) AS total_messages,
             COUNT(CASE WHEN direction = 'incoming' THEN 1 END) AS inbound_count,
             COUNT(CASE WHEN direction = 'outgoing' THEN 1 END) AS outbound_count
         FROM messages
     """)
     result = db.execute(query).mappings().first()
-    return dict(result) if result else {"total_interactions": 0, "inbound_count": 0, "outbound_count": 0}
+    return dict(result) if result else {"total_messages": 0, "inbound_count": 0, "outbound_count": 0}
 
 
 def get_timeline_data(db: Session) -> list:
-    """Agrupa las interacciones por día para el gráfico."""
+    """Agrupa los mensajes por día para el gráfico."""
     query = text("""
         SELECT
             DATE(timestamp) AS date,

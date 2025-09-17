@@ -1,8 +1,6 @@
-# app/main.py
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routers import whatsapp, notifications, auth, dashboard, interactions, courses
+from app.api.routers import whatsapp, notifications, auth, dashboard, courses, flows, crm, messages, users
 
 app = FastAPI(
     title="Moodle Chatbot Backend",
@@ -26,7 +24,7 @@ app.add_middleware(
 # --- FIN DEL BLOQUE DE CORS ---
 
 # Router para mensajes entrantes (webhook)
-app.include_router(whatsapp.router, prefix="/api/v1/whatsapp", tags=["WhatsApp Webhook"])
+app.include_router(whatsapp.router, prefix="/api/whatsapp", tags=["Whatsapp"])
 
 # Router para mensajes salientes (notificaciones)
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notifications"])
@@ -35,8 +33,11 @@ app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
 
-app.include_router(interactions.router, prefix="/api", tags=["Interactions"])
 app.include_router(courses.router, prefix="/api", tags=["Courses"])
+app.include_router(flows.router, prefix="/api", tags=["Flows"])
+app.include_router(crm.router, prefix="/api", tags=["CRM"])
+app.include_router(messages.router, prefix="/api", tags=["Messages"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
 
 
 @app.get("/")

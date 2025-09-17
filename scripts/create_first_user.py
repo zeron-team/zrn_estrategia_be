@@ -1,44 +1,32 @@
-# scripts/create_first_user.py
-
 import sys
 import os
-import getpass
-import bcrypt
+from sqlalchemy import text
 
-# Añadimos la ruta raíz del proyecto
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.db.session import SessionLocalChatbot
-from sqlalchemy import text
+from app.security import get_password_hash
 
-
-def create_user():
-    print("--- Creación del Primer Usuario Administrador (usando bcrypt directo) ---")
-
-    username = input("Ingresa el nombre de usuario: ")
-    password = getpass.getpass("Ingresa la contraseña: ")
-
-    # Ciframos la contraseña con bcrypt directamente
-    password_bytes = password.encode('utf-8')
-    salt = bcrypt.gensalt()
-    hashed_password_bytes = bcrypt.hashpw(password_bytes, salt)
-    # Guardamos el hash como una cadena de texto en la base de datos
-    hashed_password_str = hashed_password_bytes.decode('utf-8')
-
+def create_first_user():
+    print("--- Creating first user ---")
     db = SessionLocalChatbot()
     try:
-        query = text(
-            "INSERT INTO crm_users (username, hashed_password, role) VALUES (:user, :pwd, :role)"
-        )
-        db.execute(query, {"user": username, "pwd": hashed_password_str, "role": "admin"})
+        # Check if user already exists
+        query = text("SELECT id FROM crm_users WHERE username = 'zeron'")
+        user = db.execute(query).first()
+        if user:
+            print("✅ User 'zeron' already exists.")
+            return
+
+        hashed_password = get_password_hash('admin')
+        insert_query = text("INSERT INTO crm_users (username, hashed_password, role) VALUES ('zeron ', :hashed_password, 'zeron')")
+        db.execute(insert_query, {"hashed_password": hashed_password})
         db.commit()
-        print(f"✅ ¡Usuario '{username}' creado exitosamente en la base de datos!")
+        print("✅ First user 'zeron' with password 'zeron' created successfully!")
     except Exception as e:
-        print(f"❌ Error al crear el usuario: {e}")
-        db.rollback()
+        print(f"❌ Error creating first user: {e}")
     finally:
         db.close()
 
-
 if __name__ == "__main__":
-    create_user()
+    create_first_user()

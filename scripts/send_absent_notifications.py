@@ -1,4 +1,4 @@
-# scripts/send_grade_notifications.py
+# scripts/send_absent_notifications.py
 
 import sys
 import os
@@ -15,76 +15,47 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Ahora podemos importar nuestros módulos
 from app.db.session import SessionLocalChatbot, SessionLocalMoodle
 from app.core.config import settings
-
-from app.schemas.message import MessageCreate # Importamos el schema
+from app.schemas.message import MessageCreate
 from app.crud.crud_operations import create_message
-from app.flows import flow_manager # Import flow_manager
-
-# Map your approved Content SIDs (no longer used directly for sending, but kept for reference if needed)
-CONTENT = {
-    "passed":  "HXd2fd95ee344c8df04d8edd4005e29dd3",
-    "failed":  "HX38a919ad9de55146cde0244e86e9a632",
-    "absent":  "HXbe842beebb48e8f96e43e36b52eca568",
-}
+from app.flows import flow_manager
 
 FROM = settings.TWILIO_FROM_NUMBER
 
-def get_recent_grades(moodle_db: Session,
-                      hours_ago: int = 24):  # --- CAMBIO PARA PRUEBAS: de 24 a 720 horas (aprox. 1 mes)
-    """
-    Busca en la DB de Moodle las calificaciones finales de cursos que
-    fueron modificadas en las últimas 'hours_ago' horas.
-    """
+def get_recent_grades(moodle_db: Session, hours_ago: int = 720):
     start_time = datetime.now() - timedelta(hours=hours_ago)
     start_timestamp = int(start_time.timestamp())
-
     query = text("""
-        SELECT
-            u.id AS user_id,
-            u.firstname,
-            c.fullname AS course_name,
-            gg.finalgrade
-        FROM
-            mdl_grade_grades AS gg
-        JOIN
-            mdl_grade_items AS gi ON gg.itemid = gi.id
-        JOIN
-            mdl_user AS u ON gg.userid = u.id
-        JOIN
-            mdl_course AS c ON gi.courseid = c.id
-        WHERE
-            gi.itemtype = 'course'
-            AND gg.finalgrade IS NOT NULL
-            AND gg.timemodified >= :start_timestamp
+        SELECT u.id AS user_id, u.firstname, c.fullname AS course_name, gg.finalgrade
+        FROM mdl_grade_grades AS gg
+        JOIN mdl_grade_items AS gi ON gg.itemid = gi.id
+        JOIN mdl_user AS u ON gg.userid = u.id
+        JOIN mdl_course AS c ON gi.courseid = c.id
+        WHERE gi.itemtype = 'course' AND gg.finalgrade IS NOT NULL AND gg.timemodified >= :start_timestamp
     """)
-
     results = moodle_db.execute(query, {"start_timestamp": start_timestamp}).mappings().all()
     return results
 
-def send_notifications():
+def send_absent_notifications():
     """
-    Función principal que obtiene las notas y envía los mensajes.
+    Busca alumnos ausentes y les envía una notificación.
     """
-    print("🤖 Iniciando script de notificación...")
+    print("🤖 Iniciando script de notificación para alumnos AUSENTES...")
 
     DELAY_SECONDS = 5
-    TEST_PHONE_NUMBER = 'whatsapp:+5491154682263'
+    TEST_PHONE_NUMBER = settings.TEST_PHONE_NUMBER
+    if not TEST_PHONE_NUMBER:
+        print("❌ La variable de entorno TEST_PHONE_NUMBER no está configurada. Saliendo.")
+        return
     print(f"🔒 MODO SEGURO: Todos los mensajes se enviarán a {TEST_PHONE_NUMBER}")
 
     chatbot_db = SessionLocalChatbot()
     moodle_db = SessionLocalMoodle()
-
     twilio_client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
     try:
         flows = flow_manager.load_flows()
-        
-        # Map student status to the corresponding flow and initial node ID
-        status_to_flow_map = {
-            "passed": {"flow_name": "Alumno APROBADO", "node_id": "APROBADO_1"},
-            "failed": {"flow_name": "Alumno DESAPROBADO", "node_id": "DESAPROBADO_1"},
-            "absent": {"flow_name": "Alumno PENDIENTE", "node_id": "PENDIENTE_1"},
-        }
+        flow_info = {"flow_name": "Alumno PENDIENTE", "node_id": "PENDIENTE_1"}
+        status = 'absent'
 
         recent_grades = get_recent_grades(moodle_db)
 
@@ -92,26 +63,19 @@ def send_notifications():
             print("✅ No se encontraron calificaciones nuevas. Finalizando.")
             return
 
-        print(f"📊 Se encontraron {len(recent_grades)} calificaciones nuevas para notificar.")
+        print(f"📊 Se encontraron {len(recent_grades)} calificaciones nuevas para procesar.")
 
         for grade_info in recent_grades:
             student_name = grade_info['firstname']
             course_name = grade_info['course_name']
             final_grade = float(grade_info['finalgrade'])
 
-            status = ''
-            if final_grade == 0: # Assuming 0 means absent
-                status = 'absent'
-            elif final_grade >= 6: # Assuming >= 6 is passing
-                status = 'passed'
-            else:
-                status = 'failed'
-
-            if status not in status_to_flow_map:
-                print(f"⚠️  Status '{status}' no es manejado por ningún flujo. Saltando a {student_name}.")
+            # This script only handles absent students (grade == 0)
+            if final_grade != 0:
                 continue
 
-            flow_info = status_to_flow_map[status]
+            print(f"Processing ABSENT student: {student_name}")
+
             target_flow = next((f for f in flows if f.get("name") == flow_info["flow_name"]), None)
             target_node_id = flow_info["node_id"]
 
@@ -122,7 +86,7 @@ def send_notifications():
             target_node = next((node for node in target_flow["nodes"] if node["id"] == target_node_id), None)
 
             if not target_node:
-                print(f"❌ Nodo inicial '{target_node_id}' no encontrado en el flujo '{flow_info['flow_name']}'. Saltando a {student_name}.")
+                print(f"❌ Nodo inicial '{target_node_id}' no encontrado. Saltando a {student_name}.")
                 continue
 
             template_sid = target_node["data"].get("template_sid")
@@ -130,20 +94,15 @@ def send_notifications():
                 print(f"❌ El nodo inicial '{target_node_id}' no tiene un template_sid. Saltando a {student_name}.")
                 continue
 
-            # The message body is now defined in the Twilio template, but we'll log it for reference
             message_body_for_db = target_node["data"]["label"].format(
                 student_name=student_name, 
                 course_name=course_name,
-                recovery_date="a confirmar" # Placeholder
+                recovery_date="a confirmar"
             )
 
-            # 1. Send message via Twilio using the template
             try:
                 print(f"✉️  Enviando mensaje de '{status}' a {student_name}...")
-                content_variables = {
-                    "1": student_name,
-                    "2": course_name
-                }
+                content_variables = {"1": student_name, "2": course_name}
                 message = twilio_client.messages.create(
                     from_=FROM,
                     to=TEST_PHONE_NUMBER,
@@ -155,21 +114,19 @@ def send_notifications():
                 print(f"❌ Error al enviar mensaje a {student_name} vía Twilio: {e}")
                 continue
 
-            # 2. If successful, save the outgoing message to our database
             try:
                 outgoing_message = MessageCreate(
                     sender_id=FROM,
                     to_id=TEST_PHONE_NUMBER,
                     message_body=message_body_for_db,
                     direction='outgoing',
-                    template_id=target_node_id # This sets the initial node for the conversation
+                    template_id=template_sid
                 )
                 create_message(chatbot_db, message=outgoing_message)
                 print("   -> Registro guardado en la base de datos.")
             except Exception as e:
                 print(f"❌ Error al guardar el mensaje en la base de datos: {e}")
 
-            # 3. Pause before the next one
             print(f"--- Pausando por {DELAY_SECONDS} segundos... ---")
             time.sleep(DELAY_SECONDS)
 
@@ -178,6 +135,5 @@ def send_notifications():
         moodle_db.close()
         print("✅ Script finalizado.")
 
-
 if __name__ == "__main__":
-    send_notifications()
+    send_absent_notifications()

@@ -8,6 +8,7 @@ class MessageBase(BaseModel):
     sender_id: str
     message_body: str | None = None
     to_id: Optional[str] = None
+    template_id: Optional[str] = None
 
 class MessageCreate(MessageBase):
     direction: Literal['incoming', 'outgoing']
