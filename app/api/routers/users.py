@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_chatbot_db
 from app.schemas.user import User, UserCreate, UserUpdate
 from app.crud import user_queries
+from app.api.deps import get_current_user # Import the dependency
 
 router = APIRouter()
 
@@ -13,6 +14,10 @@ def create_user(user: UserCreate, db: Session = Depends(get_chatbot_db)):
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     return user_queries.create_user(db=db, user=user)
+
+@router.get("/me", response_model=User) # New endpoint to get current user
+def read_users_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 @router.get("/", response_model=List[User])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_chatbot_db)):
