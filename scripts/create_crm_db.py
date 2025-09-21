@@ -11,7 +11,7 @@ if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.
     sys.exit(1)
 
 # Import necessary modules after setting up the path
-from app.db.session import engine_chatbot
+from app.db import session
 from app.models.message import Base as CrmBase
 
 def create_crm_tables():
@@ -21,13 +21,16 @@ def create_crm_tables():
     to re-create tables that already exist.
     """
     print("Creating CRM database tables...")
+    # Ensure the engine is created before using it
+    session._ensure_chatbot_sessionmaker()
+    
     # The following models will be created as they inherit from CrmBase:
     # - CrmUser
     # - Message
     # - Student
     # - CaseAction
     # - ActionNote
-    CrmBase.metadata.create_all(bind=engine_chatbot)
+    CrmBase.metadata.create_all(bind=session.engine_chatbot)
     print("CRM tables created successfully (if they didn't exist already).")
 
 if __name__ == "__main__":
